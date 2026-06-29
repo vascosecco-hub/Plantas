@@ -1,0 +1,111 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { createServiceClient } from '@/lib/supabase'
+
+// Ferramentas (tools) que o agente do GPT Maker pode chamar
+const TOOLS = [
+  {
+    name: 'buscar_produto',
+    description: 'Busca um produto (planta, vaso ou insumo) pelo nome. Retorna SKU, preço, categoria, cuidados e imagens.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        nome: {
+          type: 'string',
+          description: 'Nome ou parte do nome do produto mencionado pelo cliente, ex: "costela de adao"',
+        },
+      },
+      required: ['nome'],
+    },
+  },
+]
+
+export async function POST(req: NextRequest) {
+  const body = await req.json()
+  const { jsonrpc, id, method, params } = body
+
+  // Método: initialize - o GPT Maker "se apresenta" ao MCP
+  if (method === 'initialize') {
+    return NextResponse.json({
+      jsonrpc: '2.0',
+      id,
+      result: {
+        protocolVersion: '2024-11-05',
+        capabilities: { tools: {} },
+        serverInfo: { name: 'loja-plantas-mcp', version: '1.0.0' },
+      },
+    })
+  }
+
+  // Método: tools/list - o GPT Maker pergunta quais ferramentas existem
+  if (method === 'tools/list') {
+    return NextResponse.json({
+      jsonrpc: '2.0',
+      id,
+      result: { tools: TOOLS },
+    })
+  }
+
+  // Método: tools/call - o GPT Maker de fato chama uma ferramenta
+  if (method === 'tools/call') {
+    const { name, arguments: args } = params
+
+    if (name === 'buscar_produto') {
+      const resultado = await buscarProduto(args.nome)
+      return NextResponse.json({
+        jsonrpc: '2.0',
+        id,
+        result: {
+          content: [{ type: 'text', text: JSON.stringify(resultado) }],
+        },
+      })
+    }
+
+    return NextResponse.json({
+      jsonrpc: '2.0',
+      id,
+      error: { code: -32601, message: `Ferramenta desconhecida: ${name}` },
+    })
+  }
+
+  return NextResponse.json({
+    jsonrpc: '2.0',
+    id,
+    error: { code: -32601, message: `Método desconhecido: ${method}` },
+  })
+}
+
+// Função que faz a busca real no Supabase, com tolerância a variações de digitação
+async function buscarProduto(nomeBuscado: string) {
+  const supabase = createServiceClient()
+
+  // Busca por aproximação (ilike = case-insensitive, % = qualquer texto antes/depois)
+  const { data: produtos, error } = await supabase
+    .from('produtos')
+    .select('*')
+    .ilike('nome', `%${nomeBuscado}%`)
+    .eq('ativo', true)
+    .limit(5)
+
+  if (error) {
+    return { encontrado: false, erro: error.message }
+  }
+
+  if (!produtos || produtos.length === 0) {
+    return { encontrado: false, mensagem: 'Produto não encontrado no catálogo.' }
+  }
+
+  // Para cada produto encontrado, busca também as imagens associadas
+  const produtosComImagens = await Promise.all(
+    produtos.map(async (produto) => {
+      const { data: imagens } = await supabase
+        .from('imagens_produto')
+        .select('arquivo, ordem')
+        .eq('sku', produto.sku)
+        .order('ordem', { ascending: true })
+
+      return { ...produto, imagens: imagens || [] }
+    })
+  )
+
+  return { encontrado: true, produtos: produtosComImagens }
+}
