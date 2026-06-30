@@ -94,6 +94,9 @@ async function buscarProduto(nomeBuscado: string) {
     return { encontrado: false, mensagem: 'Produto não encontrado no catálogo.' }
   }
 
+  // URL base do Supabase Storage, onde as imagens dos produtos estão hospedadas
+  const SUPABASE_STORAGE_URL = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/produtos`
+
   // Para cada produto encontrado, busca também as imagens associadas
   const produtosComImagens = await Promise.all(
     produtos.map(async (produto) => {
@@ -103,7 +106,13 @@ async function buscarProduto(nomeBuscado: string) {
         .eq('sku', produto.sku)
         .order('ordem', { ascending: true })
 
-      return { ...produto, imagens: imagens || [] }
+      // Adiciona a URL pública completa de cada imagem, além do nome do arquivo
+      const imagensComUrl = (imagens || []).map((img) => ({
+        ...img,
+        url: `${SUPABASE_STORAGE_URL}/${img.arquivo}`,
+      }))
+
+      return { ...produto, imagens: imagensComUrl }
     })
   )
 
