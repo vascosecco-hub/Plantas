@@ -17,6 +17,45 @@ const TOOLS = [
       required: ['nome'],
     },
   },
+  {
+    name: 'registrar_atendimento',
+    description:
+      'Salva no CRM um resumo do atendimento com o cliente. Chame UMA vez, ao final da conversa, quando já souber o que o cliente queria. Preencha com os dados que o cliente forneceu durante o papo.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        telefone: {
+          type: 'string',
+          description: 'Telefone/WhatsApp do cliente. Se não souber, envie "não informado".',
+        },
+        nome: {
+          type: 'string',
+          description: 'Nome do cliente, se ele informou.',
+        },
+        email: {
+          type: 'string',
+          description: 'E-mail do cliente, se ele informou.',
+        },
+        produto_interesse: {
+          type: 'string',
+          description: 'Produto que o cliente quis (planta, vaso, terra, fertilizante). Ex: "Costela-de-adão".',
+        },
+        sku: {
+          type: 'string',
+          description: 'Código (SKU) do produto, caso você o tenha encontrado com a ferramenta buscar_produto. Opcional.',
+        },
+        status: {
+          type: 'string',
+          description: 'Situação do cliente: "novo", "interessado", "comprou" ou "perdido".',
+        },
+        resumo: {
+          type: 'string',
+          description: 'Resumo curto da conversa, em 1 ou 2 frases.',
+        },
+      },
+      required: ['telefone', 'resumo'],
+    },
+  },
 ]
 
 export async function POST(req: NextRequest) {
@@ -31,7 +70,7 @@ export async function POST(req: NextRequest) {
       result: {
         protocolVersion: '2024-11-05',
         capabilities: { tools: {} },
-        serverInfo: { name: 'loja-plantas-mcp', version: '1.0.0' },
+        serverInfo: { name: 'loja-plantas-mcp', version: '1.1.0' },
       },
     })
   }
@@ -51,6 +90,17 @@ export async function POST(req: NextRequest) {
 
     if (name === 'buscar_produto') {
       const resultado = await buscarProduto(args.nome)
+      return NextResponse.json({
+        jsonrpc: '2.0',
+        id,
+        result: {
+          content: [{ type: 'text', text: JSON.stringify(resultado) }],
+        },
+      })
+    }
+
+    if (name === 'registrar_atendimento') {
+      const resultado = await registrarAtendimento(args)
       return NextResponse.json({
         jsonrpc: '2.0',
         id,
@@ -117,4 +167,47 @@ async function buscarProduto(nomeBuscado: string) {
   )
 
   return { encontrado: true, produtos: produtosComImagens }
+}
+
+// Dados que o agente pode enviar ao registrar um atendimento
+interface AtendimentoArgs {
+  telefone?: string
+  nome?: string
+  email?: string
+  produto_interesse?: string
+  sku?: string
+  status?: string
+  resumo?: string
+}
+
+const STATUS_VALIDOS = ['novo', 'interessado', 'comprou', 'perdido']
+
+// Salva uma linha nova na tabela atendimentos (o "caderno" do CRM)
+async function registrarAtendimento(args: AtendimentoArgs) {
+  const supabase = createServiceClient()
+
+  // Garante que o status seja sempre um dos valores aceitos
+  const status = STATUS_VALIDOS.includes((args.status || '').toLowerCase())
+    ? (args.status as string).toLowerCase()
+    : 'novo'
+
+  const { data, error } = await supabase
+    .from('atendimentos')
+    .insert({
+      telefone: args.telefone?.trim() || 'não informado',
+      nome: args.nome?.trim() || null,
+      email: args.email?.trim() || null,
+      produto_interesse: args.produto_interesse?.trim() || null,
+      sku: args.sku?.trim() || null,
+      status,
+      resumo: args.resumo?.trim() || null,
+    })
+    .select('id')
+    .single()
+
+  if (error) {
+    return { salvo: false, erro: error.message }
+  }
+
+  return { salvo: true, id: data.id, mensagem: 'Atendimento registrado no CRM.' }
 }
