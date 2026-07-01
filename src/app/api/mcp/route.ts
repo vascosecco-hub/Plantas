@@ -36,6 +36,10 @@ const TOOLS = [
           type: 'string',
           description: 'E-mail do cliente, se ele informou.',
         },
+        endereco: {
+          type: 'string',
+          description: 'Endereço de entrega do cliente, se informado.',
+        },
         produto_interesse: {
           type: 'string',
           description: 'Produto que o cliente quis (planta, vaso, terra, fertilizante). Ex: "Costela-de-adão".',
@@ -174,6 +178,7 @@ interface AtendimentoArgs {
   telefone?: string
   nome?: string
   email?: string
+  endereco?: string
   produto_interesse?: string
   sku?: string
   status?: string
@@ -197,6 +202,7 @@ async function registrarAtendimento(args: AtendimentoArgs) {
       telefone: args.telefone?.trim() || 'não informado',
       nome: args.nome?.trim() || null,
       email: args.email?.trim() || null,
+      endereco: args.endereco?.trim() || null,
       produto_interesse: args.produto_interesse?.trim() || null,
       sku: args.sku?.trim() || null,
       status,
