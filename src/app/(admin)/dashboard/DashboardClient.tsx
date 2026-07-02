@@ -54,7 +54,7 @@ function BarChart({ data, title }: { data: { label: string; value: number }[]; t
 }
 
 // ============ SVG Donut Chart ============
-function DonutChart({ data, title }: { data: { label: string; value: number; color: string }[] }) {
+function DonutChart({ data, title }: { data: { label: string; value: number; color: string }[]; title?: string }) {
   const total = data.reduce((sum, d) => sum + d.value, 0);
 
   if (total === 0) {
@@ -132,7 +132,7 @@ function DonutChart({ data, title }: { data: { label: string; value: number; col
 }
 
 // ============ SVG Line Chart ============
-function LineChart({ data, title }: { data: { date: string; value: number }[] }) {
+function LineChart({ data, title }: { data: { date: string; value: number }[]; title?: string }) {
   if (data.length === 0) {
     return (
       <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
